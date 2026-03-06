@@ -50,19 +50,6 @@ get_ip() {
     awk -v m="$mac" 'tolower($2)==m{print $3; exit}' /tmp/dhcp.leases 2>/dev/null
 }
 
-# Обновляем кэш онлайн клиентов для LuCI
-get_clients_full() {
-    for iface in $(iw dev 2>/dev/null | awk '/Interface/{print $2}'); do
-        iw dev "$iface" station dump 2>/dev/null | grep "^Station" | while read _ mac _; do
-            mac_lower=$(echo "$mac" | tr '[:upper:]' '[:lower:]')
-            hostname=$(awk -v m="$mac_lower" 'tolower($2)==m{print $4; exit}' /tmp/dhcp.leases 2>/dev/null)
-            ip=$(awk -v m="$mac_lower" 'tolower($2)==m{print $3; exit}' /tmp/dhcp.leases 2>/dev/null)
-            [ -z "$hostname" ] || [ "$hostname" = "*" ] && hostname="неизвестно"
-            printf '%s\t%s\t%s\t%s\n' "$mac" "$hostname" "$ip" "$iface"
-        done
-    done
-}
-
 BOT_TOKEN=$(uci -q get wifi_monitor.settings.bot_token)
 CHAT_ID=$(uci -q get wifi_monitor.settings.chat_id)
 
@@ -76,12 +63,9 @@ log "СТАРТ: демон wifi_monitor запущен"
 while true; do
     CURRENT=$(get_clients | sort)
 
-    # Обновляем кэш онлайн клиентов для LuCI
-    get_clients_full > /tmp/wifi_clients_online.txt
-
     if [ ! -f "$STATE_FILE" ]; then
         echo "$CURRENT" > "$STATE_FILE"
-        sleep 3
+        sleep 5
         continue
     fi
 
@@ -110,5 +94,5 @@ while true; do
     done
 
     echo "$CURRENT" > "$STATE_FILE"
-    sleep 3
+    sleep 5
 done

@@ -74,29 +74,40 @@ case "$CMD" in
         ;;
 
     clients)
-        # Возвращает JSON массив текущих клиентов
+        # Возвращает JSON массив текущих клиентов МГНОВЕННО
         printf '{"clients":['
-        first=1
-        for iface in $(iw dev 2>/dev/null | awk '/Interface/{print $2}'); do
-            for mac in $(iw dev "$iface" station dump 2>/dev/null | grep "^Station" | awk '{print $2}'); do
-                mac_lower=$(echo "$mac" | tr '[:upper:]' '[:lower:]')
-                hostname=$(awk -v m="$mac_lower" 'tolower($2)==m{print $4; exit}' /tmp/dhcp.leases 2>/dev/null)
-                ip=$(awk -v m="$mac_lower" 'tolower($2)==m{print $3; exit}' /tmp/dhcp.leases 2>/dev/null)
-                [ -z "$hostname" ] || [ "$hostname" = "*" ] && hostname="неизвестно"
-                [ -z "$ip" ] && ip=""
-                [ "$first" = "1" ] && first=0 || printf ','
-                printf '{"mac":"%s","hostname":"%s","ip":"%s","iface":"%s"}' \
-                    "$mac" "$hostname" "$ip" "$iface"
-            done
-        done
+        iw dev 2>/dev/null | awk '/Interface/{print $2}' | while read iface; do
+            iw dev "$iface" station dump 2>/dev/null | grep "^Station" | awk -v i="$iface" '{print $2, i}'
+        done | awk -v first=1 '
+            BEGIN {
+                while ((getline < "/tmp/dhcp.leases") > 0) {
+                    leases[tolower($2)] = $3 "\t" $4
+                }
+            }
+            {
+                mac = tolower($1); iface = $2
+                if (mac in leases) {
+                    split(leases[mac], parts, "\t")
+                    ip = parts[1]; host = parts[2]
+                } else {
+                    ip = ""; host = ""
+                }
+                if (host == "" || host == "*") host = "неизвестно"
+                if (first == 1) first = 0; else printf ","
+                printf "{\"mac\":\"%s\",\"hostname\":\"%s\",\"ip\":\"%s\",\"iface\":\"%s\"}", $1, host, ip, iface
+            }
+        '
         printf ']}'
         ;;
 
     log)
-        # Возвращает лог как JSON
-        LOG=$(cat "$LOG_FILE" 2>/dev/null || echo "Лог пуст")
-        # Экранируем для JSON
-        LOG=$(echo "$LOG" | sed 's/\\/\\\\/g; s/"/\\"/g' | awk '{printf "%s\\n", $0}')
-        printf '{"log":"%s"}' "$LOG"
+        # Мгновенно генерирует валидный JSON прямо из лога без буферизации
+        printf '{"log":'
+        if [ -f "$LOG_FILE" ] && [ -s "$LOG_FILE" ]; then
+            awk 'BEGIN { ORS=""; print "\"" } { gsub(/\\/, "\\\\"); gsub(/"/, "\\\""); print $0 "\\n" } END { print "\"" }' "$LOG_FILE"
+        else
+            printf '"Лог пуст"'
+        fi
+        printf '}'
         ;;
 esac
