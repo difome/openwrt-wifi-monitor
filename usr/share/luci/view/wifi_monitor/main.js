@@ -76,12 +76,13 @@ return view.extend({
         var enabled   = document.getElementById('wm-enabled').checked ? '1' : '0';
         var bot_token = document.getElementById('wm-token').value.trim();
         var chat_id   = document.getElementById('wm-chatid').value.trim();
+        var timeout   = document.getElementById('wm-timeout').value.trim() || '20';
 
         var btn = ev.target;
         btn.disabled = true;
         btn.textContent = 'Сохранение...';
 
-        return this.callRpc('save', [enabled, bot_token, chat_id]).then(function(res) {
+        return this.callRpc('save', [enabled, bot_token, chat_id, timeout]).then(function(res) {
             btn.disabled = false;
             btn.textContent = '💾 Сохранить';
             if (res.result === 'ok') {
@@ -109,12 +110,43 @@ return view.extend({
         });
     },
 
+    handleService: function(action, ev) {
+        var btn = ev.target;
+        var oldIcon = btn.textContent.split(' ')[0];
+        btn.disabled = true;
+        btn.textContent = '...';
+
+        return this.callRpc(action).then(function(res) {
+            btn.disabled = false;
+            if (action === 'start') btn.textContent = '▶️ Включить';
+            if (action === 'stop') btn.textContent = '⏹ Выключить';
+            if (action === 'restart') btn.textContent = '🔄 Перезапуск';
+
+            if (res.result === 'ok') {
+                ui.addNotification(null, E('p', '✅ Команда выполнена: ' + action), 'info');
+                // Обновляем UI без перезагрузки
+                if (action === 'start') {
+                    document.getElementById('wm-status').textContent = '🟢 Включён';
+                    document.getElementById('wm-status').style.color = '#2ecc71';
+                    document.getElementById('wm-enabled').checked = true;
+                } else if (action === 'stop') {
+                    document.getElementById('wm-status').textContent = '⚪ Выключен';
+                    document.getElementById('wm-status').style.color = '#888';
+                    document.getElementById('wm-enabled').checked = false;
+                }
+            } else {
+                ui.addNotification(null, E('p', '❌ Ошибка: ' + (res.msg || 'неизвестно')), 'error');
+            }
+        }.bind(this));
+    },
+
 
 
     render: function() {
         var enabled   = uci.get('wifi_monitor', 'settings', 'enabled')   || '0';
         var bot_token = uci.get('wifi_monitor', 'settings', 'bot_token') || '';
         var chat_id   = uci.get('wifi_monitor', 'settings', 'chat_id')   || '';
+        var timeout   = uci.get('wifi_monitor', 'settings', 'timeout')   || '20';
 
         var view = E('div', { class: 'cbi-map' }, [
 
@@ -125,14 +157,28 @@ return view.extend({
 
             /* ── Статус + управление ── */
             E('div', { class: 'cbi-section' }, [
-                E('div', { style: 'display:flex;align-items:center;gap:16px;flex-wrap:wrap' }, [
-                    E('span', { style: 'font-size:15px' }, 'Статус: '),
+                E('div', { style: 'display:flex;align-items:center;gap:12px;flex-wrap:wrap' }, [
+                    E('span', { style: 'font-size:15px; margin-right:8px;' }, 'Статус: '),
                     E('span', {
                         id: 'wm-status',
-                        style: 'font-weight:bold;font-size:15px;color:' + (enabled === '1' ? '#2ecc71' : '#888')
+                        style: 'font-weight:bold;font-size:15px;margin-right:24px;color:' + (enabled === '1' ? '#2ecc71' : '#888')
                     }, enabled === '1' ? '🟢 Включён' : '⚪ Выключен'),
+
+                    E('button', {
+                        class: 'cbi-button cbi-button-apply',
+                        click: ui.createHandlerFn(this, 'handleService', 'start')
+                    }, '▶️ Включить'),
+                    E('button', {
+                        class: 'cbi-button cbi-button-reset',
+                        click: ui.createHandlerFn(this, 'handleService', 'stop')
+                    }, '⏹ Выключить'),
                     E('button', {
                         class: 'cbi-button cbi-button-action',
+                        click: ui.createHandlerFn(this, 'handleService', 'restart')
+                    }, '🔄 Перезапуск'),
+
+                    E('button', {
+                        class: 'cbi-button cbi-button-neutral',
                         style: 'margin-left:auto;',
                         click: ui.createHandlerFn(this, 'showLogModal')
                     }, '📋 Посмотреть лог')
@@ -199,6 +245,22 @@ return view.extend({
                                 class: 'cbi-input-text',
                                 style: 'width:100%;max-width:400px;font-family:monospace'
                             })
+                        ])
+                    ]),
+
+                    E('div', { class: 'cbi-value' }, [
+                        E('label', { class: 'cbi-value-title' }, 'Задержка (сек)'),
+                        E('div', { class: 'cbi-value-field' }, [
+                            E('input', {
+                                id: 'wm-timeout',
+                                type: 'number',
+                                value: timeout,
+                                min: 5,
+                                max: 600,
+                                class: 'cbi-input-text',
+                                style: 'width:100%;max-width:100px;font-family:monospace'
+                            }),
+                            E('div', { class: 'cbi-value-description' }, 'Через сколько секунд после ухода слать уведомление (защита от дребезга)')
                         ])
                     ]),
 

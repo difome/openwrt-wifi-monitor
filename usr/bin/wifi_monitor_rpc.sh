@@ -9,6 +9,12 @@ log() {
     echo "[$(date '+%Y-%m-%d %H:%M:%S')] $1" >> "$LOG_FILE"
 }
 
+service_start() {
+    /etc/init.d/wifi_monitor enable 2>/dev/null
+    /etc/init.d/wifi_monitor start 2>/dev/null
+    rm -f /tmp/wifi_clients.state
+}
+
 service_restart() {
     rm -f /tmp/wifi_clients.state
     /etc/init.d/wifi_monitor restart 2>/dev/null
@@ -16,28 +22,46 @@ service_restart() {
 
 service_stop() {
     /etc/init.d/wifi_monitor stop 2>/dev/null
+    /etc/init.d/wifi_monitor disable 2>/dev/null
     rm -f /tmp/wifi_clients.state
 }
 
 case "$CMD" in
     save)
-        # Аргументы: save <enabled> <bot_token> <chat_id>
+        # Аргументы: save <enabled> <bot_token> <chat_id> <timeout>
         ENABLED="$2"
         BOT_TOKEN="$3"
         CHAT_ID="$4"
+        TIMEOUT="${5:-20}"
 
         uci set wifi_monitor.settings.enabled="$ENABLED"
         uci set wifi_monitor.settings.bot_token="$BOT_TOKEN"
         uci set wifi_monitor.settings.chat_id="$CHAT_ID"
+        uci set wifi_monitor.settings.timeout="$TIMEOUT"
         uci commit wifi_monitor
 
         if [ "$ENABLED" = "1" ]; then
-            service_restart
-            log "НАСТРОЙКИ: мониторинг включён"
+            service_start
+            log "НАСТРОЙКИ: мониторинг включён (таймаут ${TIMEOUT}с)"
         else
             service_stop
             log "НАСТРОЙКИ: мониторинг выключен"
         fi
+        echo '{"result":"ok"}'
+        ;;
+
+    start)
+        service_start
+        echo '{"result":"ok"}'
+        ;;
+
+    stop)
+        service_stop
+        echo '{"result":"ok"}'
+        ;;
+
+    restart)
+        service_restart
         echo '{"result":"ok"}'
         ;;
 

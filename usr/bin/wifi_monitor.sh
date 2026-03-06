@@ -52,13 +52,17 @@ get_ip() {
 
 BOT_TOKEN=$(uci -q get wifi_monitor.settings.bot_token)
 CHAT_ID=$(uci -q get wifi_monitor.settings.chat_id)
+DEBOUNCE_TIME=$(uci -q get wifi_monitor.settings.timeout || echo 20)
 
 if [ -z "$BOT_TOKEN" ] || [ -z "$CHAT_ID" ]; then
     log "ОШИБКА: bot_token или chat_id не заданы"
     exit 1
 fi
 
-log "СТАРТ: демон wifi_monitor запущен"
+PENDING_GONE_DIR="/tmp/wifi_pending_gone"
+mkdir -p "$PENDING_GONE_DIR"
+
+log "СТАРТ: демон wifi_monitor запущен (с защитой от спама, таймаут: ${DEBOUNCE_TIME}с)"
 
 while true; do
     CURRENT=$(get_clients | sort)
@@ -71,32 +75,64 @@ while true; do
 
     PREVIOUS=$(cat "$STATE_FILE")
 
+    # 1. Обработка ПОДКЛЮЧЕНИЙ
     echo "$CURRENT" | while read mac iface; do
         [ -z "$mac" ] && continue
+
+        # Если MAC отсутствовал в предыдущем списке на ЛЮБОМ интерфейсе
         if ! echo "$PREVIOUS" | grep -q "^${mac} "; then
-            h=$(get_hostname "$mac")
-            ip=$(get_ip "$mac")
-            ip_str=""
-            [ -n "$ip" ] && ip_str=$(printf '\nIP: <code>%s</code>' "$ip")
-            msg=$(printf '<blockquote><b>✅ Подключился</b>\nMAC: <code>%s</code>\nУстройство: %s%s\nИнтерфейс: <code>%s</code></blockquote>' "$mac" "$h" "$ip_str" "$iface")
-            send_tg "$msg"
-            log "ПОДКЛЮЧЕНИЕ: $mac ($h) на $iface"
+            # Проверяем, не висел ли он в очереди на отключение (быстрый возврат)
+            if [ -f "$PENDING_GONE_DIR/$mac" ]; then
+                rm -f "$PENDING_GONE_DIR/$mac"
+                log "ВОЗВРАТ: $mac вернулся до истечения таймера"
+            else
+                h=$(get_hostname "$mac")
+                ip=$(get_ip "$mac")
+                ip_str=""
+                [ -n "$ip" ] && ip_str=$(printf '\nIP: <code>%s</code>' "$ip")
+                msg=$(printf '<blockquote><b>✅ Подключился</b>\nMAC: <code>%s</code>\nУстройство: %s%s\nИнтерфейс: <code>%s</code></blockquote>' "$mac" "$h" "$ip_str" "$iface")
+                send_tg "$msg"
+                log "ПОДКЛЮЧЕНИЕ: $mac ($h) на $iface"
+            fi
         fi
     done
 
+    # 2. Обработка ОТКЛЮЧЕНИЙ (постановка в очередь)
     echo "$PREVIOUS" | while read mac iface; do
         [ -z "$mac" ] && continue
+
+        # Если MAC пропал из текущего списка СОВСЕМ (на всех интерфейсах)
         if ! echo "$CURRENT" | grep -q "^${mac} "; then
-            h=$(get_hostname "$mac")
-            ip=$(get_ip "$mac")
-            ip_str=""
-            [ -n "$ip" ] && ip_str=$(printf '\nIP: <code>%s</code>' "$ip")
-            msg=$(printf '<blockquote><b>❌ Отключился</b>\nMAC: <code>%s</code>\nУстройство: %s%s\nИнтерфейс: <code>%s</code></blockquote>' "$mac" "$h" "$ip_str" "$iface")
-            send_tg "$msg"
-            log "ОТКЛЮЧЕНИЕ: $mac ($h) на $iface"
+            if [ ! -f "$PENDING_GONE_DIR/$mac" ]; then
+                # Сохраняем время пропажи и интерфейс
+                echo "$(date +%s) $iface" > "$PENDING_GONE_DIR/$mac"
+                log "ЗАМЕЧЕН УХОД: $mac, ждем ${DEBOUNCE_TIME}с..."
+            fi
+        fi
+    done
+
+    # 3. Проверка очереди: шлем уведомления тем, кто реально ушел
+    NOW=$(date +%s)
+    # Используем find, чтобы не упасть, если папка пуста
+    find "$PENDING_GONE_DIR" -type f 2>/dev/null | while read f; do
+        mac="${f##*/}"
+        read start_ts p_iface < "$f"
+
+        if [ $((NOW - start_ts)) -ge "$DEBOUNCE_TIME" ]; then
+            # Если спустя время его всё еще нет в эфире
+            if ! get_clients | grep -q "^${mac} "; then
+                h=$(get_hostname "$mac")
+                ip=$(get_ip "$mac")
+                ip_str=""
+                [ -n "$ip" ] && ip_str=$(printf '\nIP: <code>%s</code>' "$ip")
+                msg=$(printf '<blockquote><b>❌ Отключился</b>\nMAC: <code>%s</code>\nУстройство: %s%s\nИнтерфейс: <code>%s</code></blockquote>' "$mac" "$h" "$ip_str" "$p_iface")
+                send_tg "$msg"
+                log "ОТКЛЮЧЕНИЕ ПОДТВЕРЖДЕНО: $mac ($h)"
+            fi
+            rm -f "$f"
         fi
     done
 
     echo "$CURRENT" > "$STATE_FILE"
-    sleep 2
+    sleep 5
 done
