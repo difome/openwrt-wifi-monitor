@@ -21,6 +21,12 @@ else
     echo "    уже есть, пропускаем"
 fi
 
+echo "==> Версия..."
+if [ -f "$BASE/version" ]; then
+    cp "$BASE/version" /etc/wifi_monitor_version
+    chmod 644 /etc/wifi_monitor_version
+fi
+
 echo "==> Скрипты..."
 cp "$BASE/usr/bin/wifi_monitor.sh"         /usr/bin/wifi_monitor.sh
 cp "$BASE/usr/bin/wifi_monitor_rpc.sh"     /usr/bin/wifi_monitor_rpc.sh

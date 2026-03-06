@@ -7,6 +7,7 @@
         "/tmp/wifi_monitor.log": [ "read" ],
         "/tmp/wifi_clients_online.txt": [ "read" ],
         "/tmp/wifi_clients.state": [ "read" ],
+        "/etc/wifi_monitor_version": [ "read" ],
         "/usr/bin/wifi_monitor_rpc.sh": [ "exec" ]
       }
     },

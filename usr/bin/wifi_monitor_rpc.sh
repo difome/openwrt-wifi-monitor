@@ -108,4 +108,10 @@ case "$CMD" in
         fi
         printf '}'
         ;;
+
+    version)
+        local_v=$(cat /etc/wifi_monitor_version 2>/dev/null || echo "0.0.0")
+        remote_v=$(curl -sSL -m 5 "https://raw.githubusercontent.com/difome/openwrt-wifi-monitor/main/version" 2>/dev/null || echo "0.0.0")
+        printf '{"local":"%s","remote":"%s"}' "$(echo "$local_v" | tr -d '\n\r')" "$(echo "$remote_v" | tr -d '\n\r')"
+        ;;
 esac

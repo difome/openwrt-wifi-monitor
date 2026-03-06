@@ -42,13 +42,34 @@ return view.extend({
         });
     },
 
-    pollLog: function() {
+    showLogModal: function(ev) {
+        var btn = ev.target;
+        btn.disabled = true;
+        btn.textContent = 'Загрузка...';
         return this.callRpc('log').then(function(data) {
-            var el = document.getElementById('wm-log');
-            if (!el || !data.log) return;
-            el.textContent = data.log;
-            el.scrollTop = el.scrollHeight;
-        });
+            btn.disabled = false;
+            btn.textContent = '📋 Посмотреть лог';
+            ui.showModal('Лог WiFi Monitor', [
+                E('pre', {
+                    style: 'background:#111;color:#7fc97f;padding:12px;border-radius:4px;max-height:60vh;overflow-y:auto;font-size:12px;white-space:pre-wrap;word-break:break-all;'
+                }, data.log || 'Лог пуст'),
+                E('div', { class: 'right', style: 'margin-top:16px; display:flex; gap:8px; justify-content:flex-end;' }, [
+                    E('button', {
+                        class: 'btn cbi-button cbi-button-negative',
+                        click: function() {
+                            this.callRpc('clear_log').then(function() {
+                                ui.hideModal();
+                                ui.addNotification(null, E('p', 'Лог очищен'), 'info');
+                            });
+                        }.bind(this)
+                    }, '🗑 Очистить'),
+                    E('button', {
+                        class: 'btn cbi-button cbi-button-neutral',
+                        click: ui.hideModal
+                    }, 'Закрыть')
+                ])
+            ]);
+        }.bind(this));
     },
 
     handleSave: function(ev) {
@@ -88,13 +109,7 @@ return view.extend({
         });
     },
 
-    handleClearLog: function(ev) {
-        return this.callRpc('clear_log').then(function() {
-            var el = document.getElementById('wm-log');
-            if (el) el.textContent = '';
-            ui.addNotification(null, E('p', 'Лог очищен'), 'info');
-        });
-    },
+
 
     render: function() {
         var enabled   = uci.get('wifi_monitor', 'settings', 'enabled')   || '0';
@@ -103,7 +118,10 @@ return view.extend({
 
         var view = E('div', { class: 'cbi-map' }, [
 
-            E('h2', {}, '📡 WiFi Monitor → Telegram'),
+            E('h2', { style: 'display:flex; justify-content:space-between; align-items:center;' }, [
+                '📡 WiFi Monitor → Telegram',
+                E('div', { id: 'wm-version-box', style: 'font-size:14px; font-weight:normal;' }, 'Версия: ...')
+            ]),
 
             /* ── Статус + управление ── */
             E('div', { class: 'cbi-section' }, [
@@ -113,6 +131,11 @@ return view.extend({
                         id: 'wm-status',
                         style: 'font-weight:bold;font-size:15px;color:' + (enabled === '1' ? '#2ecc71' : '#888')
                     }, enabled === '1' ? '🟢 Включён' : '⚪ Выключен'),
+                    E('button', {
+                        class: 'cbi-button cbi-button-action',
+                        style: 'margin-left:auto;',
+                        click: ui.createHandlerFn(this, 'showLogModal')
+                    }, '📋 Посмотреть лог')
                 ])
             ]),
 
@@ -195,29 +218,41 @@ return view.extend({
                 ])
             ]),
 
-            /* ── Лог ── */
-            E('div', { class: 'cbi-section' }, [
-                E('h3', {}, '📋 Лог'),
-                E('pre', {
-                    id: 'wm-log',
-                    style: 'background:#111;color:#7fc97f;padding:12px;border-radius:4px;' +
-                           'max-height:280px;overflow-y:auto;font-size:12px;' +
-                           'white-space:pre-wrap;word-break:break-all;margin:0 0 10px 0'
-                }, 'Загрузка...'),
-                E('div', { style: 'display:flex;gap:8px' }, [
-                    E('button', {
-                        class: 'cbi-button cbi-button-negative',
-                        click: ui.createHandlerFn(this, 'handleClearLog')
-                    }, '🗑 Очистить')
-                ])
-            ])
+
         ]);
 
         /* Мгновенная загрузка + Polling каждые 3 секунды */
         this.pollClients();
-        this.pollLog();
         poll.add(L.bind(this.pollClients, this), 3);
-        poll.add(L.bind(this.pollLog, this), 3);
+
+        /* Проверка версии 1 раз при открытии страницы */
+        this.callRpc('version').then(function(res) {
+            var vEl = document.getElementById('wm-version-box');
+            if (res.local && res.remote) {
+                var isOld = (res.local !== res.remote) && (res.remote !== '0.0.0');
+                vEl.innerHTML = 'Версия: <b>' + res.local + '</b>';
+                if (isOld) {
+                    vEl.appendChild(E('button', {
+                        class: 'cbi-button cbi-button-apply',
+                        style: 'margin-left:12px; padding: 2px 8px;',
+                        click: function() {
+                            ui.showModal('📡 Доступно обновление', [
+                                E('p', {}, [ 'Новая версия: ', E('strong', {}, res.remote) ]),
+                                E('p', {}, 'Выполните в терминале роутера следующую команду:'),
+                                E('pre', { style: 'padding:8px; background:#111; color:#fff;' },
+                                    'sh <(wget -O - https://raw.githubusercontent.com/difome/openwrt-wifi-monitor/refs/heads/main/install.sh)'
+                                ),
+                                E('div', { class: 'right', style: 'margin-top:16px;' }, [
+                                    E('button', { class: 'btn cbi-button cbi-button-neutral', click: ui.hideModal }, 'Закрыть')
+                                ])
+                            ]);
+                        }
+                    }, '🔄 Доступно обновление (' + res.remote + ')'));
+                }
+            } else {
+                vEl.textContent = 'Версия: неизвестна';
+            }
+        });
 
         return view;
     },
