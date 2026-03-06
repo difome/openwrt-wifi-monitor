@@ -73,6 +73,8 @@ sleep 1
 /etc/init.d/uhttpd restart
 
 echo "==> Убираем за собой..."
+# TODO
+curl -sSL -m 5 "https://raw.githubusercontent.com/difome/openwrt-wifi-monitor/main/version" > /etc/wifi_monitor_version 2>/dev/null || echo "0.0.0" > /etc/wifi_monitor_version
 rm -rf "$DL_DIR"
 
 echo ""
