@@ -1,0 +1,4 @@
+config wifi_monitor 'settings'
+	option enabled '0'
+	option bot_token ''
+	option chat_id ''

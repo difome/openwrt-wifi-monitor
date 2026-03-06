@@ -1,0 +1,24 @@
+{
+  "luci-app-wifi-monitor": {
+    "description": "WiFi Monitor Telegram notifications",
+    "read": {
+      "uci": [ "wifi_monitor", "network" ],
+      "file": {
+        "/tmp/wifi_monitor.log": [ "read" ],
+        "/tmp/wifi_clients_online.txt": [ "read" ],
+        "/tmp/wifi_clients.state": [ "read" ],
+        "/usr/bin/wifi_monitor_rpc.sh": [ "exec" ]
+      }
+    },
+    "write": {
+      "uci": [ "wifi_monitor" ],
+      "file": {
+        "/tmp/wifi_monitor.log": [ "write" ],
+        "/tmp/wifi_clients_online.txt": [ "write" ],
+        "/tmp/wifi_clients.state": [ "write" ],
+        "/etc/init.d/wifi_monitor": [ "exec" ],
+        "/usr/bin/wifi_monitor_rpc.sh": [ "exec" ]
+      }
+    }
+  }
+}
