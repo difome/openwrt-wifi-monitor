@@ -73,7 +73,8 @@ return view.extend({
     },
 
     handleSave: function(ev) {
-        var enabled   = document.getElementById('wm-enabled').checked ? '1' : '0';
+        var statusEl  = document.getElementById('wm-status');
+        var enabled   = statusEl.textContent.trim().includes('Включён') ? '1' : '0';
         var bot_token = document.getElementById('wm-token').value.trim();
         var chat_id   = document.getElementById('wm-chatid').value.trim();
         var timeout   = document.getElementById('wm-timeout').value.trim() || '20';
@@ -112,29 +113,39 @@ return view.extend({
 
     handleService: function(action, ev) {
         var btn = ev.target;
-        var oldIcon = btn.textContent.split(' ')[0];
+        var statusEl = document.getElementById('wm-status');
+        var isRunning = statusEl.textContent.trim().includes('Включён');
+
+        // Если действие не указано, значит это переключатель
+        if (!action) {
+            action = isRunning ? 'stop' : 'start';
+        }
+
         btn.disabled = true;
+        var originalText = btn.textContent;
         btn.textContent = '...';
 
         return this.callRpc(action).then(function(res) {
             btn.disabled = false;
-            if (action === 'start') btn.textContent = '▶️ Включить';
-            if (action === 'stop') btn.textContent = '⏹ Выключить';
-            if (action === 'restart') btn.textContent = '🔄 Перезапуск';
-
             if (res.result === 'ok') {
-                ui.addNotification(null, E('p', '✅ Команда выполнена: ' + action), 'info');
-                // Обновляем UI без перезагрузки
+                ui.addNotification(null, E('p', '✅ Выполнено: ' + action), 'info');
+
+                // Обновляем статус и текст кнопки
                 if (action === 'start') {
-                    document.getElementById('wm-status').textContent = '🟢 Включён';
-                    document.getElementById('wm-status').style.color = '#2ecc71';
-                    document.getElementById('wm-enabled').checked = true;
+                    statusEl.textContent = '🟢 Включён';
+                    statusEl.style.color = '#2ecc71';
+                    btn.textContent = '⏹ Выключить';
+                    btn.className = 'cbi-button cbi-button-reset';
                 } else if (action === 'stop') {
-                    document.getElementById('wm-status').textContent = '⚪ Выключен';
-                    document.getElementById('wm-status').style.color = '#888';
-                    document.getElementById('wm-enabled').checked = false;
+                    statusEl.textContent = '⚪ Выключен';
+                    statusEl.style.color = '#888';
+                    btn.textContent = '▶️ Включить';
+                    btn.className = 'cbi-button cbi-button-apply';
+                } else {
+                    btn.textContent = originalText;
                 }
             } else {
+                btn.textContent = originalText;
                 ui.addNotification(null, E('p', '❌ Ошибка: ' + (res.msg || 'неизвестно')), 'error');
             }
         }.bind(this));
@@ -165,13 +176,11 @@ return view.extend({
                     }, enabled === '1' ? '🟢 Включён' : '⚪ Выключен'),
 
                     E('button', {
-                        class: 'cbi-button cbi-button-apply',
-                        click: ui.createHandlerFn(this, 'handleService', 'start')
-                    }, '▶️ Включить'),
-                    E('button', {
-                        class: 'cbi-button cbi-button-reset',
-                        click: ui.createHandlerFn(this, 'handleService', 'stop')
-                    }, '⏹ Выключить'),
+                        id: 'wm-toggle-btn',
+                        class: enabled === '1' ? 'cbi-button cbi-button-reset' : 'cbi-button cbi-button-apply',
+                        click: ui.createHandlerFn(this, 'handleService', null)
+                    }, enabled === '1' ? '⏹ Выключить' : '▶️ Включить'),
+
                     E('button', {
                         class: 'cbi-button cbi-button-action',
                         click: ui.createHandlerFn(this, 'handleService', 'restart')
@@ -207,18 +216,6 @@ return view.extend({
             E('div', { class: 'cbi-section' }, [
                 E('h3', {}, '⚙️ Настройки'),
                 E('div', { class: 'cbi-section-node' }, [
-
-                    E('div', { class: 'cbi-value' }, [
-                        E('label', { class: 'cbi-value-title' }, 'Включить'),
-                        E('div', { class: 'cbi-value-field' }, [
-                            E('input', {
-                                id: 'wm-enabled',
-                                type: 'checkbox',
-                                checked: enabled === '1' ? '' : null,
-                                style: 'width:auto;transform:scale(1.5);margin:6px 4px'
-                            })
-                        ])
-                    ]),
 
                     E('div', { class: 'cbi-value' }, [
                         E('label', { class: 'cbi-value-title' }, 'Bot Token'),
