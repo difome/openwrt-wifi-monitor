@@ -64,27 +64,36 @@ mkdir -p "$PENDING_GONE_DIR"
 
 log "СТАРТ: демон wifi_monitor запущен (с защитой от спама, таймаут: ${DEBOUNCE_TIME}с)"
 
-while true; do
-    CURRENT=$(get_clients | sort)
+# Функция для получения списка уникальных MAC с их основным интерфейсом
+# Возвращает строки формата "MAC IFACE" (если MAC на нескольких - берем первый)
+scan_clients() {
+    get_clients | sort -k1,1 -u
+}
 
+while true; do
+    # 1. Делаем ЕДИНЫЙ снимок системы на этот цикл
+    CURRENT_LIST=$(scan_clients)
+    CURRENT_MACS=$(echo "$CURRENT_LIST" | awk '{print $1}')
+
+    # Если файла состояния нет - инициализируем и спим
     if [ ! -f "$STATE_FILE" ]; then
-        echo "$CURRENT" > "$STATE_FILE"
-        sleep 5
+        echo "$CURRENT_LIST" > "$STATE_FILE"
+        sleep "$DEBOUNCE_TIME"
         continue
     fi
 
-    PREVIOUS=$(cat "$STATE_FILE")
+    PREVIOUS_LIST=$(cat "$STATE_FILE")
+    PREVIOUS_MACS=$(echo "$PREVIOUS_LIST" | awk '{print $1}')
 
-    # 1. Обработка ПОДКЛЮЧЕНИЙ
-    echo "$CURRENT" | while read mac iface; do
+    # 2. Обработка ПОДКЛЮЧЕНИЙ
+    # Ищем MAC, которых нет в PREVIOUS_MACS, но есть в CURRENT_MACS
+    echo "$CURRENT_LIST" | while read mac iface; do
         [ -z "$mac" ] && continue
-
-        # Если MAC отсутствовал в предыдущем списке на ЛЮБОМ интерфейсе
-        if ! echo "$PREVIOUS" | grep -q "^${mac} "; then
-            # Проверяем, не висел ли он в очереди на отключение (быстрый возврат)
+        if ! echo "$PREVIOUS_MACS" | grep -qi "$mac"; then
+            # Если он был в очереди на уход - просто "вычеркиваем" его
             if [ -f "$PENDING_GONE_DIR/$mac" ]; then
                 rm -f "$PENDING_GONE_DIR/$mac"
-                log "ВОЗВРАТ: $mac вернулся до истечения таймера"
+                log "ВОЗВРАТ: $mac (роуминг или глюк пресечен)"
             else
                 h=$(get_hostname "$mac")
                 ip=$(get_ip "$mac")
@@ -97,30 +106,29 @@ while true; do
         fi
     done
 
-    # 2. Обработка ОТКЛЮЧЕНИЙ (постановка в очередь)
-    echo "$PREVIOUS" | while read mac iface; do
+    # 3. Обработка ОТКЛЮЧЕНИЙ (постановка в очередь)
+    # Ищем MAC, которые есть в PREVIOUS_MACS, но исчезли из CURRENT_MACS
+    echo "$PREVIOUS_LIST" | while read mac iface; do
         [ -z "$mac" ] && continue
-
-        # Если MAC пропал из текущего списка СОВСЕМ (на всех интерфейсах)
-        if ! echo "$CURRENT" | grep -q "^${mac} "; then
+        if ! echo "$CURRENT_MACS" | grep -qi "$mac"; then
             if [ ! -f "$PENDING_GONE_DIR/$mac" ]; then
-                # Сохраняем время пропажи и интерфейс
                 echo "$(date +%s) $iface" > "$PENDING_GONE_DIR/$mac"
                 log "ЗАМЕЧЕН УХОД: $mac, ждем ${DEBOUNCE_TIME}с..."
             fi
         fi
     done
 
-    # 3. Проверка очереди: шлем уведомления тем, кто реально ушел
+    # 4. Проверка очереди (подтверждение ухода)
     NOW=$(date +%s)
-    # Используем find, чтобы не упасть, если папка пуста
-    find "$PENDING_GONE_DIR" -type f 2>/dev/null | while read f; do
-        mac="${f##*/}"
+    ls "$PENDING_GONE_DIR" 2>/dev/null | while read mac; do
+        [ -z "$mac" ] && continue
+        f="$PENDING_GONE_DIR/$mac"
         read start_ts p_iface < "$f"
 
+        # Если время вышло
         if [ $((NOW - start_ts)) -ge "$DEBOUNCE_TIME" ]; then
-            # Если спустя время его всё еще нет в эфире
-            if ! get_clients | grep -q "^${mac} "; then
+            # Проверяем по свежему снимку - его все еще нет?
+            if ! echo "$CURRENT_MACS" | grep -qi "$mac"; then
                 h=$(get_hostname "$mac")
                 ip=$(get_ip "$mac")
                 ip_str=""
@@ -133,6 +141,7 @@ while true; do
         fi
     done
 
-    echo "$CURRENT" > "$STATE_FILE"
+    # Обновляем состояние на основе текущего снимка
+    echo "$CURRENT_LIST" > "$STATE_FILE"
     sleep 5
 done
