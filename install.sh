@@ -35,6 +35,7 @@ echo "==> init.d служба..."
 cp "$BASE/etc/init.d/wifi_monitor" /etc/init.d/wifi_monitor
 chmod 755 /etc/init.d/wifi_monitor
 /etc/init.d/wifi_monitor enable 2>/dev/null || true
+/etc/init.d/wifi_monitor restart 2>/dev/null || true
 
 echo "==> LuCI menu.d..."
 cp "$BASE/usr/share/luci/menu.d/luci-app-wifi-monitor.json" \
