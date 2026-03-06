@@ -76,8 +76,10 @@ while true; do
         if ! echo "$PREVIOUS" | grep -q "^${mac} "; then
             h=$(get_hostname "$mac")
             ip=$(get_ip "$mac")
-            ip_str=""; [ -n "$ip" ] && ip_str="\nIP: <code>${ip}</code>"
-            send_tg "✅ <b>Подключился</b>\nMAC: <code>${mac}</code>\nУстройство: ${h}${ip_str}\nИнтерфейс: <code>${iface}</code>"
+            ip_str=""
+            [ -n "$ip" ] && ip_str=$(printf '\nIP: <code>%s</code>' "$ip")
+            msg=$(printf '<blockquote><b>✅ Подключился</b>\nMAC: <code>%s</code>\nУстройство: %s%s\nИнтерфейс: <code>%s</code></blockquote>' "$mac" "$h" "$ip_str" "$iface")
+            send_tg "$msg"
             log "ПОДКЛЮЧЕНИЕ: $mac ($h) на $iface"
         fi
     done
@@ -87,12 +89,14 @@ while true; do
         if ! echo "$CURRENT" | grep -q "^${mac} "; then
             h=$(get_hostname "$mac")
             ip=$(get_ip "$mac")
-            ip_str=""; [ -n "$ip" ] && ip_str="\nIP: <code>${ip}</code>"
-            send_tg "❌ <b>Отключился</b>\nMAC: <code>${mac}</code>\nУстройство: ${h}${ip_str}\nИнтерфейс: <code>${iface}</code>"
+            ip_str=""
+            [ -n "$ip" ] && ip_str=$(printf '\nIP: <code>%s</code>' "$ip")
+            msg=$(printf '<blockquote><b>❌ Отключился</b>\nMAC: <code>%s</code>\nУстройство: %s%s\nИнтерфейс: <code>%s</code></blockquote>' "$mac" "$h" "$ip_str" "$iface")
+            send_tg "$msg"
             log "ОТКЛЮЧЕНИЕ: $mac ($h) на $iface"
         fi
     done
 
     echo "$CURRENT" > "$STATE_FILE"
-    sleep 5
+    sleep 2
 done

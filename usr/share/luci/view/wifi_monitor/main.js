@@ -213,9 +213,11 @@ return view.extend({
             ])
         ]);
 
-        /* Polling каждые 5 секунд */
-        poll.add(L.bind(this.pollClients, this), 5);
-        poll.add(L.bind(this.pollLog, this), 5);
+        /* Мгновенная загрузка + Polling каждые 3 секунды */
+        this.pollClients();
+        this.pollLog();
+        poll.add(L.bind(this.pollClients, this), 3);
+        poll.add(L.bind(this.pollLog, this), 3);
 
         return view;
     },

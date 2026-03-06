@@ -50,13 +50,11 @@ case "$CMD" in
             exit 0
         fi
         IP=$(uci -q get network.lan.ipaddr || echo "?")
-        MSG="🔔 WiFi Monitor тест
-Роутер: ${IP}
-Время: $(date '+%Y-%m-%d %H:%M:%S')
-Всё работает ✅"
+        MSG=$(printf '<blockquote><b>🔔 WiFi Monitor тест</b>\nРоутер: %s\nВремя: %s\nВсё работает ✅</blockquote>' "$IP" "$(date '+%Y-%m-%d %H:%M:%S')")
         RESP=$(curl -s -m 10 -X POST \
             "https://api.telegram.org/bot${BOT_TOKEN}/sendMessage" \
             -d "chat_id=${CHAT_ID}" \
+            -d "parse_mode=HTML" \
             --data-urlencode "text=${MSG}" 2>&1)
         if echo "$RESP" | grep -q '"ok":true'; then
             log "ТЕСТ: успешно отправлено"
