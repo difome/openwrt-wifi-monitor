@@ -23,7 +23,7 @@ send_tg() {
         -d "parse_mode=HTML" \
         --data-urlencode "text=${msg}" 2>&1)
     if echo "$resp" | grep -q '"ok":true'; then
-        log "OK → $(echo "$msg" | head -1)"
+        log "OK → $(echo "$msg" | sed -e 's/<[^>]*>//g' | head -1)"
     else
         local err=$(echo "$resp" | grep -o '"description":"[^"]*"' | cut -d'"' -f4)
         log "ОШИБКА TG: ${err:-нет ответа}"
