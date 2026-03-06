@@ -78,13 +78,13 @@ case "$CMD" in
         printf '{"clients":['
         first=1
         for iface in $(iw dev 2>/dev/null | awk '/Interface/{print $2}'); do
-            iw dev "$iface" station dump 2>/dev/null | grep "^Station" | while read _ mac _; do
+            for mac in $(iw dev "$iface" station dump 2>/dev/null | grep "^Station" | awk '{print $2}'); do
                 mac_lower=$(echo "$mac" | tr '[:upper:]' '[:lower:]')
                 hostname=$(awk -v m="$mac_lower" 'tolower($2)==m{print $4; exit}' /tmp/dhcp.leases 2>/dev/null)
                 ip=$(awk -v m="$mac_lower" 'tolower($2)==m{print $3; exit}' /tmp/dhcp.leases 2>/dev/null)
                 [ -z "$hostname" ] || [ "$hostname" = "*" ] && hostname="неизвестно"
                 [ -z "$ip" ] && ip=""
-                if [ "$first" = "1" ]; then first=0; else printf ','; fi
+                [ "$first" = "1" ] && first=0 || printf ','
                 printf '{"mac":"%s","hostname":"%s","ip":"%s","iface":"%s"}' \
                     "$mac" "$hostname" "$ip" "$iface"
             done

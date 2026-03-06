@@ -81,7 +81,7 @@ while true; do
 
     if [ ! -f "$STATE_FILE" ]; then
         echo "$CURRENT" > "$STATE_FILE"
-        sleep 60
+        sleep 3
         continue
     fi
 
@@ -110,5 +110,5 @@ while true; do
     done
 
     echo "$CURRENT" > "$STATE_FILE"
-    sleep 60
+    sleep 3
 done
