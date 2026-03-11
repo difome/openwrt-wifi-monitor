@@ -1,5 +1,4 @@
 #!/bin/sh /etc/rc.common
-# /etc/init.d/wifi_monitor
 
 USE_PROCD=1
 START=99
@@ -19,6 +18,10 @@ start_service() {
 
 service_triggers() {
     procd_add_reload_trigger "wifi_monitor"
+}
+
+stop_service() {
+    killall wifi_monitor.sh 2>/dev/null
 }
 
 reload_service() {

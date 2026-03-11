@@ -1,6 +1,4 @@
 #!/bin/sh
-# /usr/bin/wifi_monitor_rpc.sh
-# Вызывается через rpcd. Первый аргумент - команда.
 
 CMD="$1"
 LOG_FILE="/tmp/wifi_monitor.log"
@@ -23,12 +21,12 @@ service_restart() {
 service_stop() {
     /etc/init.d/wifi_monitor stop 2>/dev/null
     /etc/init.d/wifi_monitor disable 2>/dev/null
+    killall wifi_monitor.sh 2>/dev/null
     rm -f /tmp/wifi_clients.state
 }
 
 case "$CMD" in
     save)
-        # Аргументы: save <enabled> <bot_token> <chat_id> <timeout>
         ENABLED="$2"
         BOT_TOKEN="$3"
         CHAT_ID="$4"
@@ -96,7 +94,12 @@ case "$CMD" in
         ;;
 
     clients)
-        # Возвращает JSON массив текущих клиентов МГНОВЕННО
+        ENABLED=$(uci -q get wifi_monitor.settings.enabled 2>/dev/null || echo "0")
+        if [ "$ENABLED" != "1" ]; then
+            printf '{"clients":[]}'
+            exit 0
+        fi
+
         printf '{"clients":['
         iw dev 2>/dev/null | awk '/Interface/{print $2}' | while read iface; do
             iw dev "$iface" station dump 2>/dev/null | grep "^Station" | awk -v i="$iface" '{print $2, i}'
@@ -123,7 +126,6 @@ case "$CMD" in
         ;;
 
     log)
-        # Мгновенно генерирует валидный JSON прямо из лога без буферизации
         printf '{"log":'
         if [ -f "$LOG_FILE" ] && [ -s "$LOG_FILE" ]; then
             awk 'BEGIN { ORS=""; print "\"" } { gsub(/\\/, "\\\\"); gsub(/"/, "\\\""); print $0 "\\n" } END { print "\"" }' "$LOG_FILE"

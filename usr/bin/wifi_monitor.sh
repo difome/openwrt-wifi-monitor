@@ -1,5 +1,4 @@
 #!/bin/sh
-# /usr/bin/wifi_monitor.sh — procd демон
 
 STATE_FILE="/tmp/wifi_clients.state"
 LOG_FILE="/tmp/wifi_monitor.log"
@@ -64,18 +63,14 @@ mkdir -p "$PENDING_GONE_DIR"
 
 log "СТАРТ: демон wifi_monitor запущен (с защитой от спама, таймаут: ${DEBOUNCE_TIME}с)"
 
-# Функция для получения списка уникальных MAC с их основным интерфейсом
-# Возвращает строки формата "MAC IFACE" (если MAC на нескольких - берем первый)
 scan_clients() {
     get_clients | sort -k1,1 -u
 }
 
 while true; do
-    # 1. Делаем ЕДИНЫЙ снимок системы на этот цикл
     CURRENT_LIST=$(scan_clients)
     CURRENT_MACS=$(echo "$CURRENT_LIST" | awk '{print $1}')
 
-    # Если файла состояния нет - инициализируем и спим
     if [ ! -f "$STATE_FILE" ]; then
         echo "$CURRENT_LIST" > "$STATE_FILE"
         sleep "$DEBOUNCE_TIME"
@@ -85,12 +80,9 @@ while true; do
     PREVIOUS_LIST=$(cat "$STATE_FILE")
     PREVIOUS_MACS=$(echo "$PREVIOUS_LIST" | awk '{print $1}')
 
-    # 2. Обработка ПОДКЛЮЧЕНИЙ
-    # Ищем MAC, которых нет в PREVIOUS_MACS, но есть в CURRENT_MACS
     echo "$CURRENT_LIST" | while read mac iface; do
         [ -z "$mac" ] && continue
         if ! echo "$PREVIOUS_MACS" | grep -qi "$mac"; then
-            # Если он был в очереди на уход - просто "вычеркиваем" его
             if [ -f "$PENDING_GONE_DIR/$mac" ]; then
                 rm -f "$PENDING_GONE_DIR/$mac"
                 log "ВОЗВРАТ: $mac (роуминг или глюк пресечен)"
@@ -106,8 +98,6 @@ while true; do
         fi
     done
 
-    # 3. Обработка ОТКЛЮЧЕНИЙ (постановка в очередь)
-    # Ищем MAC, которые есть в PREVIOUS_MACS, но исчезли из CURRENT_MACS
     echo "$PREVIOUS_LIST" | while read mac iface; do
         [ -z "$mac" ] && continue
         if ! echo "$CURRENT_MACS" | grep -qi "$mac"; then
@@ -118,16 +108,13 @@ while true; do
         fi
     done
 
-    # 4. Проверка очереди (подтверждение ухода)
     NOW=$(date +%s)
     ls "$PENDING_GONE_DIR" 2>/dev/null | while read mac; do
         [ -z "$mac" ] && continue
         f="$PENDING_GONE_DIR/$mac"
         read start_ts p_iface < "$f"
 
-        # Если время вышло
         if [ $((NOW - start_ts)) -ge "$DEBOUNCE_TIME" ]; then
-            # Проверяем по свежему снимку - его все еще нет?
             if ! echo "$CURRENT_MACS" | grep -qi "$mac"; then
                 h=$(get_hostname "$mac")
                 ip=$(get_ip "$mac")
@@ -141,7 +128,6 @@ while true; do
         fi
     done
 
-    # Обновляем состояние на основе текущего снимка
     echo "$CURRENT_LIST" > "$STATE_FILE"
     sleep 5
 done

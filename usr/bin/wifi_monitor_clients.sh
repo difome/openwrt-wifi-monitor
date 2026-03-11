@@ -1,6 +1,9 @@
 #!/bin/sh
-# /usr/bin/wifi_monitor_clients.sh
-# Выводит текущих клиентов в формате TSV: MAC\tHostname\tIP\tIface
+
+ENABLED=$(uci -q get wifi_monitor.settings.enabled 2>/dev/null || echo "0")
+if [ "$ENABLED" != "1" ]; then
+    exit 0
+fi
 
 for iface in $(iw dev 2>/dev/null | awk '/Interface/{print $2}'); do
     iw dev "$iface" station dump 2>/dev/null | grep "^Station" | while read _ mac _; do

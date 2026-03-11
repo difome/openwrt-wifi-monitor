@@ -116,7 +116,6 @@ return view.extend({
         var statusEl = document.getElementById('wm-status');
         var isRunning = statusEl.textContent.trim().includes('Включён');
 
-        // Если действие не указано, значит это переключатель
         if (!action) {
             action = isRunning ? 'stop' : 'start';
         }
@@ -130,7 +129,6 @@ return view.extend({
             if (res.result === 'ok') {
                 ui.addNotification(null, E('p', '✅ Выполнено: ' + action), 'info');
 
-                // Обновляем статус и текст кнопки
                 if (action === 'start') {
                     statusEl.textContent = '🟢 Включён';
                     statusEl.style.color = '#2ecc71';
@@ -166,7 +164,6 @@ return view.extend({
                 E('div', { id: 'wm-version-box', style: 'font-size:14px; font-weight:normal;' }, 'Версия: ...')
             ]),
 
-            /* ── Статус + управление ── */
             E('div', { class: 'cbi-section' }, [
                 E('div', { style: 'display:flex;align-items:center;gap:12px;flex-wrap:wrap' }, [
                     E('span', { style: 'font-size:15px; margin-right:8px;' }, 'Статус: '),
@@ -194,7 +191,6 @@ return view.extend({
                 ])
             ]),
 
-            /* ── Онлайн клиенты ── */
             E('div', { class: 'cbi-section' }, [
                 E('h3', {}, [ '🔗 Онлайн: ', E('span', { id: 'wm-count' }, '...') ]),
                 E('div', { class: 'table-wrapper' }, [
@@ -212,7 +208,6 @@ return view.extend({
                 ])
             ]),
 
-            /* ── Настройки ── */
             E('div', { class: 'cbi-section' }, [
                 E('h3', {}, '⚙️ Настройки'),
                 E('div', { class: 'cbi-section-node' }, [
@@ -280,11 +275,9 @@ return view.extend({
 
         ]);
 
-        /* Мгновенная загрузка + Polling каждые 3 секунды */
         this.pollClients();
         poll.add(L.bind(this.pollClients, this), 3);
 
-        /* Проверка версии 1 раз при открытии страницы */
         this.callRpc('version').then(function(res) {
             var vEl = document.getElementById('wm-version-box');
             if (res.local && res.remote) {
