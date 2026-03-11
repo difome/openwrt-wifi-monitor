@@ -8,6 +8,8 @@ log() {
 }
 
 service_start() {
+    uci set wifi_monitor.settings.enabled="1"
+    uci commit wifi_monitor
     /etc/init.d/wifi_monitor enable 2>/dev/null
     /etc/init.d/wifi_monitor start 2>/dev/null
     rm -f /tmp/wifi_clients.state
@@ -19,6 +21,8 @@ service_restart() {
 }
 
 service_stop() {
+    uci set wifi_monitor.settings.enabled="0"
+    uci commit wifi_monitor
     /etc/init.d/wifi_monitor stop 2>/dev/null
     /etc/init.d/wifi_monitor disable 2>/dev/null
     killall wifi_monitor.sh 2>/dev/null
